@@ -1,0 +1,116 @@
+<?xml version="1.0"?>
+<!--
+  arm.xacro
+  Mounts a Universal Robots arm on the mobile base and wires it to
+  ros2_control through the gz_ros2_control plugin.
+
+  The arm model itself comes from the official ur_description package
+  (version 3.5.x). We only provide the mount and the control interface.
+
+  Joint names get the "arm_" prefix (tf_prefix), so they become
+  arm_shoulder_pan_joint, arm_elbow_joint, ... - these must match the names
+  listed in config/controllers.yaml.
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:macro name="manipulator" params="parent ur_type:=ur5e *origin">
+
+    <xacro:property name="prefix" value="arm_"/>
+    <xacro:property name="ur_cfg"
+                    value="$(find ur_description)/config/${ur_type}"/>
+
+    <!-- ============ UR ARM FROM ur_description ============ -->
+    <xacro:include filename="$(find ur_description)/urdf/ur_macro.xacro"/>
+
+    <xacro:ur_robot
+        name="${ur_type}"
+        tf_prefix="${prefix}"
+        parent="${parent}"
+        joint_limits_parameters_file="${ur_cfg}/joint_limits.yaml"
+        kinematics_parameters_file="${ur_cfg}/default_kinematics.yaml"
+        physical_parameters_file="${ur_cfg}/physical_parameters.yaml"
+        visual_parameters_file="${ur_cfg}/visual_parameters.yaml"
+        force_abs_paths="true"
+        safety_limits="false"
+        safety_pos_margin="0.15"
+        safety_k_position="20">
+      <xacro:insert_block name="origin"/>
+    </xacro:ur_robot>
+
+    <!-- ============ ros2_control HARDWARE ============ -->
+    <!--
+      initial_value sets the pose the arm holds at startup. A folded pose is
+      important: if the arm starts fully stretched out it can hit the ground
+      or tip the base over on the first physics step.
+    -->
+    <ros2_control name="arm_hardware" type="system">
+      <hardware>
+        <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+      </hardware>
+
+      <joint name="${prefix}shoulder_pan_joint">
+        <command_interface name="position"/>
+        <state_interface name="position">
+          <param name="initial_value">0.0</param>
+        </state_interface>
+        <state_interface name="velocity"/>
+        <state_interface name="effort"/>
+      </joint>
+
+      <joint name="${prefix}shoulder_lift_joint">
+        <command_interface name="position"/>
+        <state_interface name="position">
+          <param name="initial_value">-1.57</param>
+        </state_interface>
+        <state_interface name="velocity"/>
+        <state_interface name="effort"/>
+      </joint>
+
+      <joint name="${prefix}elbow_joint">
+        <command_interface name="position"/>
+        <state_interface name="position">
+          <param name="initial_value">1.57</param>
+        </state_interface>
+        <state_interface name="velocity"/>
+        <state_interface name="effort"/>
+      </joint>
+
+      <joint name="${prefix}wrist_1_joint">
+        <command_interface name="position"/>
+        <state_interface name="position">
+          <param name="initial_value">-1.57</param>
+        </state_interface>
+        <state_interface name="velocity"/>
+        <state_interface name="effort"/>
+      </joint>
+
+      <joint name="${prefix}wrist_2_joint">
+        <command_interface name="position"/>
+        <state_interface name="position">
+          <param name="initial_value">-1.57</param>
+        </state_interface>
+        <state_interface name="velocity"/>
+        <state_interface name="effort"/>
+      </joint>
+
+      <joint name="${prefix}wrist_3_joint">
+        <command_interface name="position"/>
+        <state_interface name="position">
+          <param name="initial_value">0.0</param>
+        </state_interface>
+        <state_interface name="velocity"/>
+        <state_interface name="effort"/>
+      </joint>
+    </ros2_control>
+
+    <!-- ============ GAZEBO CONTROL PLUGIN ============ -->
+    <!-- This is what starts controller_manager inside the simulation. -->
+    <gazebo>
+      <plugin filename="gz_ros2_control-system"
+              name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+        <parameters>$(find field_robot)/config/controllers.yaml</parameters>
+      </plugin>
+    </gazebo>
+
+  </xacro:macro>
+</robot>

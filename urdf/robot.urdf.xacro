@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<!--
+  robot.urdf.xacro
+  Top-level description: mobile base + (optionally) manipulator.
+
+  Build the plain URDF to inspect it:
+    xacro robot.urdf.xacro > /tmp/robot.urdf
+    check_urdf /tmp/robot.urdf
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="field_robot">
+
+  <!-- set to false to run the base alone (useful while debugging) -->
+  <xacro:arg name="use_arm" default="true"/>
+  <xacro:arg name="ur_type" default="ur5e"/>
+
+  <xacro:include filename="$(find field_robot)/urdf/base.xacro"/>
+
+  <xacro:mobile_base/>
+
+  <xacro:if value="$(arg use_arm)">
+    <xacro:include filename="$(find field_robot)/urdf/arm.xacro"/>
+    <xacro:manipulator parent="top_plate" ur_type="$(arg ur_type)">
+      <origin xyz="0 0 0.01" rpy="0 0 0"/>
+    </xacro:manipulator>
+  </xacro:if>
+
+</robot>

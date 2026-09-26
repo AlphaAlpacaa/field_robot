@@ -1,0 +1,36 @@
+# ros2_control configuration.
+# The mobile base is driven by the Gazebo DiffDrive system plugin, so only the
+# manipulator joints are managed here. Joint names carry the "arm_" prefix set
+# in arm.xacro (tf_prefix).
+
+controller_manager:
+  ros__parameters:
+    update_rate: 200  # Hz
+    use_sim_time: true
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    arm_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
+arm_controller:
+  ros__parameters:
+    joints:
+      - arm_shoulder_pan_joint
+      - arm_shoulder_lift_joint
+      - arm_elbow_joint
+      - arm_wrist_1_joint
+      - arm_wrist_2_joint
+      - arm_wrist_3_joint
+    command_interfaces:
+      - position
+    state_interfaces:
+      - position
+      - velocity
+    state_publish_rate: 100.0
+    action_monitor_rate: 20.0
+    allow_partial_joints_goal: false
+    constraints:
+      stopped_velocity_tolerance: 0.2
+      goal_time: 0.0

@@ -19,6 +19,11 @@
   <exec_depend>joint_state_broadcaster</exec_depend>
   <exec_depend>gz_ros2_control</exec_depend>
   <exec_depend>ur_description</exec_depend>
+  <exec_depend>field_robot_moveit_config</exec_depend>
+  <exec_depend>moveit_ros_move_group</exec_depend>
+  <exec_depend>moveit_configs_utils</exec_depend>
+  <exec_depend>moveit_ros_visualization</exec_depend>
+  <exec_depend>moveit_planners_ompl</exec_depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

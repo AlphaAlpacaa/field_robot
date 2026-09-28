@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="field_robot">
+    <xacro:arg name="initial_positions_file" default="initial_positions.yaml" />
+
+    <!-- Import field_robot urdf file -->
+    <xacro:include filename="/home/alpaca/moveit_setup/field_robot.urdf" />
+
+    <!-- Import control_xacro -->
+    <xacro:include filename="field_robot.ros2_control.xacro" />
+
+
+    <xacro:field_robot_ros2_control name="FakeSystem" initial_positions_file="$(arg initial_positions_file)"/>
+
+</robot>

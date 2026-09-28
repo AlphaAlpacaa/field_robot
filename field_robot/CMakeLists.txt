@@ -9,7 +9,9 @@ install(
 )
 
 install(
-  PROGRAMS scripts/wave_arm.py
+  PROGRAMS
+    scripts/wave_arm.py
+    scripts/test_gripper.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

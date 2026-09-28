@@ -1,0 +1,125 @@
+<?xml version="1.0"?>
+<!--
+  gripper.xacro
+  Simple two-finger parallel gripper mounted on the arm tool flange.
+
+  Why not robotiq_description? The 2F-85 uses a four-bar linkage with mimic
+  joints. It looks better, but getting it to grasp reliably under gz_ros2_control
+  takes significant tuning. This gripper has two independent prismatic joints,
+  which behave predictably in simulation and are easy to reason about.
+
+  Joint names:
+    gripper_left_finger_joint   0.0 = closed, 0.04 = fully open
+    gripper_right_finger_joint  same (mirrored axis)
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:macro name="gripper" params="parent *origin">
+
+    <xacro:property name="palm_x" value="0.06"/>
+    <xacro:property name="palm_y" value="0.10"/>
+    <xacro:property name="palm_z" value="0.05"/>
+
+    <xacro:property name="finger_x" value="0.02"/>
+    <xacro:property name="finger_y" value="0.015"/>
+    <xacro:property name="finger_z" value="0.07"/>
+
+    <xacro:property name="stroke" value="0.04"/>   <!-- per finger -->
+
+    <!-- ============ PALM ============ -->
+    <link name="gripper_base_link">
+      <visual>
+        <geometry><box size="${palm_x} ${palm_y} ${palm_z}"/></geometry>
+        <material name="gripper_grey"><color rgba="0.25 0.25 0.28 1.0"/></material>
+      </visual>
+      <collision>
+        <geometry><box size="${palm_x} ${palm_y} ${palm_z}"/></geometry>
+      </collision>
+      <inertial>
+        <mass value="0.6"/>
+        <inertia ixx="0.0007" ixy="0" ixz="0" iyy="0.0004" iyz="0" izz="0.0007"/>
+      </inertial>
+    </link>
+
+    <joint name="gripper_base_joint" type="fixed">
+      <parent link="${parent}"/>
+      <child  link="gripper_base_link"/>
+      <xacro:insert_block name="origin"/>
+    </joint>
+
+    <!-- ============ FINGER MACRO ============ -->
+    <!-- reflect = +1 for left, -1 for right -->
+    <xacro:macro name="finger" params="side reflect">
+      <link name="gripper_${side}_finger_link">
+        <visual>
+          <geometry><box size="${finger_x} ${finger_y} ${finger_z}"/></geometry>
+          <material name="finger_dark"><color rgba="0.15 0.15 0.15 1.0"/></material>
+        </visual>
+        <collision>
+          <geometry><box size="${finger_x} ${finger_y} ${finger_z}"/></geometry>
+        </collision>
+        <inertial>
+          <mass value="0.08"/>
+          <inertia ixx="4e-5" ixy="0" ixz="0" iyy="4e-5" iyz="0" izz="1e-5"/>
+        </inertial>
+      </link>
+
+      <joint name="gripper_${side}_finger_joint" type="prismatic">
+        <parent link="gripper_base_link"/>
+        <child  link="gripper_${side}_finger_link"/>
+        <!-- fingers start closed, sitting just below the palm -->
+        <origin xyz="0 0 ${palm_z/2 + finger_z/2}" rpy="0 0 0"/>
+        <axis xyz="0 ${reflect} 0"/>
+        <limit lower="0.0" upper="${stroke}" effort="60.0" velocity="0.15"/>
+        <dynamics damping="5.0" friction="1.0"/>
+      </joint>
+
+      <!-- high friction so grasped objects do not slip out -->
+      <gazebo reference="gripper_${side}_finger_link">
+        <mu1>2.0</mu1>
+        <mu2>2.0</mu2>
+        <kp>1000000.0</kp>
+        <kd>1.0</kd>
+        <minDepth>0.002</minDepth>
+      </gazebo>
+    </xacro:macro>
+
+    <xacro:finger side="left"  reflect="1"/>
+    <xacro:finger side="right" reflect="-1"/>
+
+    <!-- ============ GRASP FRAME ============ -->
+    <!-- The frame MoveIt will aim at when picking. Sits between the fingertips. -->
+    <link name="grasp_frame"/>
+    <joint name="grasp_frame_joint" type="fixed">
+      <parent link="gripper_base_link"/>
+      <child  link="grasp_frame"/>
+      <origin xyz="0 0 ${palm_z/2 + finger_z}" rpy="0 0 0"/>
+    </joint>
+
+    <!-- ============ ros2_control ============ -->
+    <ros2_control name="gripper_hardware" type="system">
+      <hardware>
+        <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+      </hardware>
+
+      <joint name="gripper_left_finger_joint">
+        <command_interface name="position"/>
+        <state_interface name="position">
+          <param name="initial_value">0.0</param>
+        </state_interface>
+        <state_interface name="velocity"/>
+        <state_interface name="effort"/>
+      </joint>
+
+      <joint name="gripper_right_finger_joint">
+        <command_interface name="position"/>
+        <state_interface name="position">
+          <param name="initial_value">0.0</param>
+        </state_interface>
+        <state_interface name="velocity"/>
+        <state_interface name="effort"/>
+      </joint>
+    </ros2_control>
+
+  </xacro:macro>
+</robot>

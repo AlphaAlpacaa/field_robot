@@ -1,7 +1,6 @@
 # ros2_control configuration.
 # The mobile base is driven by the Gazebo DiffDrive system plugin, so only the
-# manipulator joints are managed here. Joint names carry the "arm_" prefix set
-# in arm.xacro (tf_prefix).
+# manipulator and gripper joints are managed here.
 
 controller_manager:
   ros__parameters:
@@ -12,6 +11,9 @@ controller_manager:
       type: joint_state_broadcaster/JointStateBroadcaster
 
     arm_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
+    gripper_controller:
       type: joint_trajectory_controller/JointTrajectoryController
 
 arm_controller:
@@ -34,3 +36,30 @@ arm_controller:
     constraints:
       stopped_velocity_tolerance: 0.2
       goal_time: 0.0
+
+# A JointTrajectoryController is used for the gripper rather than
+# GripperActionController, because the latter drives a single joint while our
+# gripper has two independent fingers. MoveIt talks to it over
+# FollowJointTrajectory, exactly like the arm.
+gripper_controller:
+  ros__parameters:
+    joints:
+      - gripper_left_finger_joint
+      - gripper_right_finger_joint
+    command_interfaces:
+      - position
+    state_interfaces:
+      - position
+      - velocity
+    state_publish_rate: 100.0
+    action_monitor_rate: 20.0
+    allow_partial_joints_goal: false
+    constraints:
+      stopped_velocity_tolerance: 0.0
+      goal_time: 0.0
+      # Loose tolerances: when the fingers close on an object they stop early,
+      # and a strict controller would report that as a failure.
+      gripper_left_finger_joint:
+        goal: 0.02
+      gripper_right_finger_joint:
+        goal: 0.02

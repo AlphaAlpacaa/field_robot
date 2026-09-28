@@ -106,12 +106,23 @@ def generate_launch_description():
         condition=IfCondition(use_arm),
     )
 
+    gripper_controller = Node(
+        package='controller_manager',
+        executable='spawner',
+        arguments=['gripper_controller',
+                   '--controller-manager', '/controller_manager'],
+        condition=IfCondition(use_arm),
+    )
+
     after_spawn = RegisterEventHandler(
         OnProcessExit(target_action=spawn,
                       on_exit=[joint_state_broadcaster]))
     after_jsb = RegisterEventHandler(
         OnProcessExit(target_action=joint_state_broadcaster,
                       on_exit=[arm_controller]))
+    after_arm = RegisterEventHandler(
+        OnProcessExit(target_action=arm_controller,
+                      on_exit=[gripper_controller]))
 
     rviz_node = Node(
         package='rviz2',
@@ -128,5 +139,6 @@ def generate_launch_description():
         bridge,
         after_spawn,
         after_jsb,
+        after_arm,
         rviz_node,
     ])

@@ -7,3 +7,5 @@ initial_positions:
   arm_wrist_1_joint: 0
   arm_wrist_2_joint: 0
   arm_wrist_3_joint: 0
+  gripper_left_finger_joint: 0
+  gripper_right_finger_joint: 0

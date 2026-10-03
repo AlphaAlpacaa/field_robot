@@ -68,9 +68,9 @@
         <parent link="gripper_base_link"/>
         <child  link="gripper_${side}_finger_link"/>
         <!-- fingers start closed, sitting just below the palm -->
-        <origin xyz="0 0 ${palm_z/2 + finger_z/2}" rpy="0 0 0"/>
+        <origin xyz="0 ${reflect*(finger_y/2 + 0.002)} ${palm_z/2 + finger_z/2}" rpy="0 0 0"/>
         <axis xyz="0 ${reflect} 0"/>
-        <limit lower="0.0" upper="${stroke}" effort="60.0" velocity="0.15"/>
+        <limit lower="-0.001" upper="${stroke + 0.001}" effort="60.0" velocity="0.15"/>
         <dynamics damping="5.0" friction="1.0"/>
       </joint>
 
@@ -81,6 +81,7 @@
         <kp>1000000.0</kp>
         <kd>1.0</kd>
         <minDepth>0.002</minDepth>
+        <self_collide>false</self_collide>
       </gazebo>
     </xacro:macro>
 

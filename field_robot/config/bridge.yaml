@@ -1,6 +1,6 @@
 # ROS <-> Gazebo topic bridge.
-# Gazebo transport and ROS 2 are separate middlewares; every topic you want
-# on the ROS side must be listed here. Forgetting this is the most common
+# Gazebo transport and ROS 2 are separate middlewares; every topic you want on
+# the ROS side must be listed here. Forgetting this is the most common
 # "why is there no data?" mistake.
 
 - ros_topic_name: "/clock"
@@ -43,4 +43,58 @@
   gz_topic_name: "/imu"
   ros_type_name: "sensor_msgs/msg/Imu"
   gz_type_name: "gz.msgs.IMU"
+  direction: GZ_TO_ROS
+
+# ---------------- front RGB-D camera ----------------
+# Point clouds are heavy. If the simulation gets slow, comment out the
+# /points lines and work with the depth image instead.
+
+- ros_topic_name: "/front_camera/image"
+  gz_topic_name: "/front_camera/image"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/front_camera/depth_image"
+  gz_topic_name: "/front_camera/depth_image"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/front_camera/points"
+  gz_topic_name: "/front_camera/points"
+  ros_type_name: "sensor_msgs/msg/PointCloud2"
+  gz_type_name: "gz.msgs.PointCloudPacked"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/front_camera/camera_info"
+  gz_topic_name: "/front_camera/camera_info"
+  ros_type_name: "sensor_msgs/msg/CameraInfo"
+  gz_type_name: "gz.msgs.CameraInfo"
+  direction: GZ_TO_ROS
+
+# ---------------- wrist (eye-in-hand) RGB-D camera ----------------
+
+- ros_topic_name: "/wrist_camera/image"
+  gz_topic_name: "/wrist_camera/image"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/wrist_camera/depth_image"
+  gz_topic_name: "/wrist_camera/depth_image"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/wrist_camera/points"
+  gz_topic_name: "/wrist_camera/points"
+  ros_type_name: "sensor_msgs/msg/PointCloud2"
+  gz_type_name: "gz.msgs.PointCloudPacked"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/wrist_camera/camera_info"
+  gz_topic_name: "/wrist_camera/camera_info"
+  ros_type_name: "sensor_msgs/msg/CameraInfo"
+  gz_type_name: "gz.msgs.CameraInfo"
   direction: GZ_TO_ROS

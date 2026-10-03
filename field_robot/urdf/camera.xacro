@@ -1,0 +1,92 @@
+<?xml version="1.0"?>
+<!--
+  camera.xacro
+  Reusable RGB-D camera macro (Gazebo "rgbd_camera" sensor).
+
+  Each instance publishes four Gazebo topics, all prefixed with its name:
+    <name>/image          color image
+    <name>/depth_image    depth image
+    <name>/points         point cloud
+    <name>/camera_info    intrinsics
+
+  Every one of those needs a line in config/bridge.yaml to reach ROS.
+
+  Note on frames: ROS vision software expects the "optical" convention
+  (z forward, x right, y down), while URDF links use (x forward, z up).
+  That is why each camera gets a second link rotated by -90/0/-90, and why
+  the sensor reports that link as its frame.
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:macro name="rgbd_camera" params="name parent *origin
+                                          width:=640 height:=480
+                                          hfov:=1.0472
+                                          near:=0.05 far:=10.0
+                                          update_rate:=15">
+
+    <xacro:property name="PI_2" value="1.57079632679"/>
+
+    <link name="${name}_link">
+      <visual>
+        <geometry><box size="0.03 0.09 0.03"/></geometry>
+        <material name="camera_body"><color rgba="0.1 0.1 0.12 1.0"/></material>
+      </visual>
+      <collision>
+        <geometry><box size="0.03 0.09 0.03"/></geometry>
+      </collision>
+      <inertial>
+        <mass value="0.1"/>
+        <inertia ixx="8e-5" ixy="0" ixz="0" iyy="2e-5" iyz="0" izz="8e-5"/>
+      </inertial>
+    </link>
+
+    <joint name="${name}_joint" type="fixed">
+      <parent link="${parent}"/>
+      <child  link="${name}_link"/>
+      <xacro:insert_block name="origin"/>
+    </joint>
+
+    <!-- optical frame: what image and point cloud data is expressed in -->
+    <link name="${name}_optical_frame"/>
+    <joint name="${name}_optical_joint" type="fixed">
+      <parent link="${name}_link"/>
+      <child  link="${name}_optical_frame"/>
+      <origin xyz="0 0 0" rpy="${-PI_2} 0 ${-PI_2}"/>
+    </joint>
+
+    <gazebo reference="${name}_link">
+      <sensor name="${name}" type="rgbd_camera">
+        <topic>${name}</topic>
+        <gz_frame_id>${name}_optical_frame</gz_frame_id>
+        <update_rate>${update_rate}</update_rate>
+        <always_on>true</always_on>
+        <visualize>false</visualize>
+        <camera>
+          <horizontal_fov>${hfov}</horizontal_fov>
+          <image>
+            <width>${width}</width>
+            <height>${height}</height>
+            <format>R8G8B8</format>
+          </image>
+          <clip>
+            <near>${near}</near>
+            <far>${far}</far>
+          </clip>
+          <!-- a little noise keeps perception code honest -->
+          <noise>
+            <type>gaussian</type>
+            <mean>0.0</mean>
+            <stddev>0.005</stddev>
+          </noise>
+          <depth_camera>
+            <clip>
+              <near>${near}</near>
+              <far>${far}</far>
+            </clip>
+          </depth_camera>
+        </camera>
+      </sensor>
+    </gazebo>
+
+  </xacro:macro>
+</robot>

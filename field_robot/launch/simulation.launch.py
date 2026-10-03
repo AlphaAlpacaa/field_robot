@@ -129,6 +129,7 @@ def generate_launch_description():
         executable='rviz2',
         output='screen',
         condition=IfCondition(rviz),
+        arguments=['-d', os.path.join(pkg, 'config', 'robot.rviz')],
         parameters=[{'use_sim_time': True}],
     )
 

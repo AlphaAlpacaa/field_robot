@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <!--
   robot.urdf.xacro
-  Top-level description: mobile base + manipulator + gripper.
+  Top-level description: mobile base + manipulator + gripper + cameras.
 
   Build the plain URDF to inspect it:
     xacro robot.urdf.xacro > /tmp/robot.urdf
@@ -11,10 +11,22 @@
 
   <xacro:arg name="use_arm" default="true"/>
   <xacro:arg name="use_gripper" default="true"/>
+  <xacro:arg name="use_front_camera" default="true"/>
+  <xacro:arg name="use_wrist_camera" default="true"/>
   <xacro:arg name="ur_type" default="ur5e"/>
 
   <xacro:include filename="$(find field_robot)/urdf/base.xacro"/>
+  <xacro:include filename="$(find field_robot)/urdf/camera.xacro"/>
+
   <xacro:mobile_base/>
+
+  <!-- forward-looking camera for driving and crop scanning -->
+  <xacro:if value="$(arg use_front_camera)">
+    <xacro:rgbd_camera name="front_camera" parent="base_link"
+                       width="640" height="480" hfov="1.2" far="15.0">
+      <origin xyz="0.40 0 0.10" rpy="0 0.15 0"/>
+    </xacro:rgbd_camera>
+  </xacro:if>
 
   <xacro:if value="$(arg use_arm)">
     <xacro:include filename="$(find field_robot)/urdf/arm.xacro"/>
@@ -24,10 +36,22 @@
 
     <xacro:if value="$(arg use_gripper)">
       <xacro:include filename="$(find field_robot)/urdf/gripper.xacro"/>
-      <!-- arm_tool0 is the UR tool flange; z+ points away from the flange -->
       <xacro:gripper parent="arm_tool0">
         <origin xyz="0 0 0.025" rpy="0 0 0"/>
       </xacro:gripper>
+
+      <!--
+        Eye-in-hand camera. Mounted on the palm, looking along the gripper's
+        approach direction, offset sideways so the fingers stay out of frame.
+        Short range and narrow FOV: it is for close inspection, not navigation.
+      -->
+      <xacro:if value="$(arg use_wrist_camera)">
+        <xacro:rgbd_camera name="wrist_camera" parent="gripper_base_link"
+                           width="640" height="480" hfov="1.0"
+                           near="0.02" far="2.0" update_rate="30">
+          <origin xyz="0.045 0 0.01" rpy="0 -1.5708 0"/>
+        </xacro:rgbd_camera>
+      </xacro:if>
     </xacro:if>
   </xacro:if>
 

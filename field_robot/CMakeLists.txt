@@ -12,6 +12,7 @@ install(
   PROGRAMS
     scripts/wave_arm.py
     scripts/test_gripper.py
+    scripts/tomato_detector.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

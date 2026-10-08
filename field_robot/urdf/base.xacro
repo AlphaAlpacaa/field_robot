@@ -12,7 +12,7 @@
     <xacro:property name="body_length" value="0.80"/>
     <xacro:property name="body_width"  value="0.55"/>
     <xacro:property name="body_height" value="0.25"/>
-    <xacro:property name="body_mass"   value="35.0"/>
+    <xacro:property name="body_mass"   value="70.0"/>
 
     <xacro:property name="wheel_radius" value="0.16"/>
     <xacro:property name="wheel_width"  value="0.10"/>
@@ -26,10 +26,12 @@
     <!-- ===================== INERTIA MACROS ===================== -->
     <xacro:macro name="box_inertia" params="m x y z">
       <inertial>
-        <mass value="${m}"/>
-        <inertia ixx="${m*(y*y+z*z)/12.0}" ixy="0.0" ixz="0.0"
-                 iyy="${m*(x*x+z*z)/12.0}" iyz="0.0"
-                 izz="${m*(x*x+y*y)/12.0}"/>
+        <origin xyz="0 0 ${-body_height/2 + 0.06}" rpy="0 0 0"/>
+        <mass value="${body_mass}"/>
+        <inertia
+          ixx="${body_mass*(body_width*body_width + body_height*body_height)/12.0}" ixy="0" ixz="0"
+          iyy="${body_mass*(body_length*body_length + body_height*body_height)/12.0}" iyz="0"
+          izz="${body_mass*(body_length*body_length + body_width*body_width)/12.0}"/>
       </inertial>
     </xacro:macro>
 
@@ -105,10 +107,10 @@
       </joint>
 
       <gazebo reference="${name}_wheel_link">
-        <mu1>1.2</mu1>
-        <mu2>1.0</mu2>
-        <kp>1000000.0</kp>
-        <kd>100.0</kd>
+        <mu1>1.0</mu1>   <!-- along the rolling direction: grip -->
+        <mu2>0.35</mu2>  <!-- sideways: must slip, this is a skid-steer -->
+        <kp>500000.0</kp>
+        <kd>50.0</kd>
       </gazebo>
     </xacro:macro>
 
@@ -184,13 +186,19 @@
     <gazebo>
       <plugin filename="gz-sim-diff-drive-system"
               name="gz::sim::systems::DiffDrive">
+        <max_linear_acceleration>0.8</max_linear_acceleration>
+        <min_linear_acceleration>-0.8</min_linear_acceleration>
+        <max_angular_acceleration>1.5</max_angular_acceleration>
+        <min_angular_acceleration>-1.5</min_angular_acceleration>
+        <max_linear_velocity>1.2</max_linear_velocity>
+        <max_angular_velocity>1.5</max_angular_velocity>
+        <xacro:property name="wheel_y" value="${body_width/2 + wheel_width/2 + 0.06}"/>
         <left_joint>front_left_wheel_joint</left_joint>
         <left_joint>rear_left_wheel_joint</left_joint>
         <right_joint>front_right_wheel_joint</right_joint>
         <right_joint>rear_right_wheel_joint</right_joint>
         <wheel_separation>${2*wheel_y}</wheel_separation>
         <wheel_radius>${wheel_radius}</wheel_radius>
-        <max_linear_acceleration>2.0</max_linear_acceleration>
         <topic>/cmd_vel</topic>
         <odom_topic>/odom</odom_topic>
         <tf_topic>/tf</tf_topic>

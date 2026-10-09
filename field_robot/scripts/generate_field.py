@@ -55,7 +55,12 @@ FORK_CHANCE = 0.6            # probability a node splits in two
 BRANCH_ANGLE = (0.45, 0.95)  # radians away from the parent direction
 UPWARD_BIAS = 0.22           # 0 = keep deviating freely, 1 = snap to vertical
 
-LEAF_CHANCE = 0.6            # chance a mid-level node carries a leaf cluster
+# Foliage blobs at the branch nodes. Off by default: they read as dark green
+# balls rather than leaves, and a sphere the same colour as the stems is more
+# confusing than no foliage at all. Turn them back on with --leaf-chance if
+# you want fruit to be partly hidden - that makes the detection problem
+# harder in a realistic way, since a real canopy occludes most of the crop.
+LEAF_CHANCE = 0.0
 LEAF_RADIUS = 0.055
 
 FRUIT_RADIUS = 0.035
@@ -110,7 +115,7 @@ def segment_pose(p0, p1):
 # ----------------------------------------------------------------------------
 # plant growth
 # ----------------------------------------------------------------------------
-def grow(rng):
+def grow(rng, leaf_chance=LEAF_CHANCE):
     """
     Build one plant.
 
@@ -130,7 +135,7 @@ def grow(rng):
         if depth >= FRUIT_MIN_DEPTH:
             tips.append((end, depth))
 
-        if depth >= 1 and rng.random() < LEAF_CHANCE:
+        if depth >= 1 and rng.random() < leaf_chance:
             leaves.append((end, LEAF_RADIUS * (RADIUS_RATIO ** (depth - 1))))
 
         if depth >= MAX_DEPTH or radius * RADIUS_RATIO < MIN_RADIUS:
@@ -406,6 +411,10 @@ def main():
     p.add_argument('--max-fruits', type=int, default=4)
     p.add_argument('--unripe-ratio', type=float, default=0.3,
                    help='fraction of fruit that is green (0-1)')
+    p.add_argument('--leaf-chance', type=float, default=LEAF_CHANCE,
+                   help='chance of a foliage blob at each node (0 = none). '
+                        'Raise it to partly hide the fruit and make detection '
+                        'harder.')
     p.add_argument('--start-x', type=float, default=2.0,
                    help='distance from the origin to the first plant (m)')
     p.add_argument('--seed', type=int, default=42)
@@ -431,7 +440,7 @@ def main():
             jy = y_row + rng.uniform(-0.05, 0.05)
             yaw = rng.uniform(0, 2 * math.pi)
 
-            segments, leaves, tips = grow(rng)
+            segments, leaves, tips = grow(rng, args.leaf_chance)
             n_segments += len(segments)
 
             # fruit goes on a random subset of tips, preferring the outer ones

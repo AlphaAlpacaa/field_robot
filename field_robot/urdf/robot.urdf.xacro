@@ -24,7 +24,7 @@
   <xacro:if value="$(arg use_front_camera)">
     <xacro:rgbd_camera name="front_camera" parent="base_link"
                        width="640" height="480" hfov="1.2" far="15.0">
-      <origin xyz="0.40 0 0.10" rpy="0 0.15 0"/>
+      <origin xyz="0.42 0 0.22" rpy="0 0.0 0"/>
     </xacro:rgbd_camera>
   </xacro:if>
 

@@ -98,3 +98,18 @@
   ros_type_name: "sensor_msgs/msg/CameraInfo"
   gz_type_name: "gz.msgs.CameraInfo"
   direction: GZ_TO_ROS
+
+# ---------------- model poses ----------------
+# Every model's pose in the world, as a TF message whose child_frame_id is the
+# model name. The picking node uses it for one thing only: after the gripper
+# closes, it needs to know WHICH tomato it is holding so it can send that
+# fruit's detach message. A real machine would cut the stem; detaching by name
+# is the simulation's stand-in for that.
+#
+# The Gazebo topic carries the world name, so this line must be updated if the
+# world is renamed.
+- ros_topic_name: "/model_poses"
+  gz_topic_name: "/world/tomato_field/pose/info"
+  ros_type_name: "tf2_msgs/msg/TFMessage"
+  gz_type_name: "gz.msgs.Pose_V"
+  direction: GZ_TO_ROS

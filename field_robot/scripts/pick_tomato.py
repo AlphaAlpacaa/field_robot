@@ -43,7 +43,6 @@ from moveit_msgs.action import MoveGroup
 from moveit_msgs.msg import (Constraints, JointConstraint, MotionPlanRequest,
                              PlanningOptions, RobotState)
 from moveit_msgs.srv import GetPositionIK
-from tf2_msgs.msg import TFMessage
 from trajectory_msgs.msg import JointTrajectoryPoint
 
 ARM_JOINTS = [
@@ -138,6 +137,73 @@ def dist(p, q):
     return math.sqrt((p.x - q.x) ** 2 + (p.y - q.y) ** 2 + (p.z - q.z) ** 2)
 
 
+def parse_pose_dump(text):
+    """
+    Pull {name: (x, y, z, qx, qy, qz, qw)} out of `gz topic -e` output.
+
+    The output is protobuf text format, and it leaves out any field that is
+    zero - a model at the origin simply has no `x:` line - so every field
+    starts at its default and is overwritten only if it appears.
+
+        pose {
+          name: "plant_0_0"
+          id: 11
+          position { x: 2.011  y: -1.847 }
+          orientation { z: 0.760  w: 0.649 }
+        }
+    """
+    poses = {}
+    depth = 0
+    name = None
+    section = None
+    pos = [0.0, 0.0, 0.0]
+    rot = [0.0, 0.0, 0.0, 1.0]
+
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+
+        if line.endswith('{'):
+            head = line[:-1].strip()
+            depth += 1
+            if depth == 1 and head == 'pose':
+                name, section = None, None
+                pos = [0.0, 0.0, 0.0]
+                rot = [0.0, 0.0, 0.0, 1.0]
+            elif depth == 2:
+                section = head
+            continue
+
+        if line == '}':
+            if depth == 2:
+                section = None
+            elif depth == 1 and name:
+                poses[name] = tuple(pos) + tuple(rot)
+            depth = max(0, depth - 1)
+            continue
+
+        if depth == 1 and line.startswith('name:'):
+            parts = line.split('"')
+            if len(parts) > 1:
+                name = parts[1]
+            continue
+
+        if depth == 2 and ':' in line:
+            key, _, value = line.partition(':')
+            key = key.strip()
+            try:
+                number = float(value)
+            except ValueError:
+                continue
+            if section == 'position' and key in 'xyz' and len(key) == 1:
+                pos['xyz'.index(key)] = number
+            elif section == 'orientation' and key in 'xyzw' and len(key) == 1:
+                rot['xyzw'.index(key)] = number
+
+    return poses
+
+
 # ---------------------------------------------------------------------------
 class TomatoPicker(Node):
 
@@ -182,14 +248,13 @@ class TomatoPicker(Node):
 
         self.scan_poses = None
         self.pick_poses = None
-        self.model_poses = {}
 
         self.create_subscription(PoseArray, '/tomatoes/scan_poses',
                                  self._on_scan, sensor_qos)
         self.create_subscription(PoseArray, '/tomatoes/pick_poses',
                                  self._on_pick, sensor_qos)
-        self.create_subscription(TFMessage, '/model_poses',
-                                 self._on_models, 10)
+        # Model poses are not subscribed to: see gz_model_poses() for why they
+        # are read from Gazebo's CLI instead.
 
         self.ik = self.create_client(GetPositionIK, '/compute_ik')
         self.move = ActionClient(self, MoveGroup, '/move_action')
@@ -206,12 +271,38 @@ class TomatoPicker(Node):
     def _on_pick(self, msg):
         self.pick_poses = msg
 
-    def _on_models(self, msg):
-        # Keep whole transforms, not just positions: the robot's heading
-        # matters as much as its location when converting a grasp point from
-        # the robot's frame into the world.
-        for t in msg.transforms:
-            self.model_poses[t.child_frame_id] = t.transform
+    # -- ground truth from Gazebo -------------------------------------------
+    def gz_model_poses(self):
+        """
+        Every model's pose in the world, read straight from Gazebo's CLI.
+
+        Why not the ros_gz bridge? Gazebo's pose topics convert to a TFMessage
+        and the bridge accepts them, but the result is empty: Gazebo writes
+        each entity's name into the message's own `name` field while the
+        converter looks for frame ids in the header. Every transform then
+        arrives with a blank child_frame_id and they overwrite one another.
+        A topic that publishes at 50 Hz and says nothing is worse than no
+        topic, so the pose is asked for only when it is needed.
+
+        Two topics are read because Gazebo splits them: things sitting still
+        go to pose/info, moving bodies to dynamic_pose/info.
+
+        This is ground truth, not perception, and deliberately so. Working out
+        which fruit the gripper is holding stands in for cutting the stem - a
+        physical act the simulation has no other way to express.
+        """
+        poses = {}
+        for topic in (f'/world/{self.world}/pose/info',
+                      f'/world/{self.world}/dynamic_pose/info'):
+            try:
+                out = subprocess.run(
+                    ['gz', 'topic', '-t', topic, '-e', '-n', '1'],
+                    capture_output=True, text=True, timeout=8)
+            except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+                self.get_logger().warn(f'could not read {topic}: {e}')
+                continue
+            poses.update(parse_pose_dump(out.stdout))
+        return poses
 
     # -- plumbing -----------------------------------------------------------
     def wait_for_everything(self):
@@ -260,8 +351,36 @@ class TomatoPicker(Node):
                 return [name_to_pos[j] for j in ARM_JOINTS]
         return None
 
-    def move_arm_to(self, joint_values, label=''):
-        """Plan and execute a collision-free path to these joint angles."""
+    def move_arm_to(self, joint_values, label='', tries=3):
+        """
+        Plan and execute a collision-free path to these joint angles.
+
+        Retried on PLANNING_FAILED. RRTConnect samples randomly, so a pose it
+        cannot reach within the time limit on one run is often found on the
+        next; through a gap in the branches that is the normal case rather
+        than the exception. Other failures are not retried - a goal in
+        collision stays in collision however many times it is asked.
+        """
+        for attempt in range(1, tries + 1):
+            code = self._try_move(joint_values, label)
+            if code == 1:
+                self.get_logger().info(f'{label}: done')
+                return True
+            if code != -2:
+                self.get_logger().error(
+                    f'{label}: motion failed (code {code})')
+                return False
+            if attempt < tries:
+                self.get_logger().warn(
+                    f'{label}: planner found nothing, retrying '
+                    f'({attempt}/{tries - 1})')
+        self.get_logger().error(
+            f'{label}: planning failed {tries} times - the arm probably '
+            f'cannot get there without hitting something')
+        return False
+
+    def _try_move(self, joint_values, label):
+        """One planning and execution attempt; returns the MoveIt error code."""
         goal = MoveGroup.Goal()
         req = MotionPlanRequest()
         req.group_name = 'arm'
@@ -290,16 +409,11 @@ class TomatoPicker(Node):
         handle = send.result()
         if not handle or not handle.accepted:
             self.get_logger().error(f'{label}: goal rejected')
-            return False
+            return -1
 
         result_future = handle.get_result_async()
         rclpy.spin_until_future_complete(self, result_future)
-        code = result_future.result().result.error_code.val
-        if code != 1:
-            self.get_logger().error(f'{label}: motion failed (code {code})')
-            return False
-        self.get_logger().info(f'{label}: done')
-        return True
+        return result_future.result().result.error_code.val
 
     # -- gripper ------------------------------------------------------------
     def set_gripper(self, width, seconds=1):
@@ -319,23 +433,30 @@ class TomatoPicker(Node):
         return True
 
     # -- fruit --------------------------------------------------------------
-    def robot_transform(self):
-        """The robot's pose in the world, or None with a readable complaint."""
-        t = self.model_poses.get(self.robot_name)
-        if t is not None:
-            return t
+    def find_robot(self, poses):
+        """
+        The robot's pose, or None with a readable complaint.
 
-        if not self.model_poses:
+        Gazebo may name the entry by the model alone or by one of its links,
+        depending on which pose topic it came from, so both are accepted.
+        """
+        for name in (self.robot_name,
+                     f'{self.robot_name}::base_footprint',
+                     f'{self.robot_name}::base_link'):
+            if name in poses:
+                return poses[name]
+
+        if not poses:
             self.get_logger().warn(
-                'nothing arriving on /model_poses. Check that the bridge is '
-                'running and that the world name in config/bridge.yaml matches '
-                'the world actually loaded:  ros2 topic hz /model_poses')
+                f'Gazebo returned no poses. Is the world really called '
+                f'"{self.world}"?  Check with:  gz topic -l | grep pose')
         else:
-            sample = sorted(n for n in self.model_poses
-                            if not n.startswith('tomato_'))[:12]
+            others = sorted(n for n in poses if not n.startswith('tomato_'))
+            fruit = sum(1 for n in poses if n.startswith('tomato_'))
             self.get_logger().warn(
                 f'no pose for a model called "{self.robot_name}". '
-                f'Names seen include: {", ".join(sample)}. '
+                f'{fruit} tomatoes and {len(others)} others: '
+                f'{", ".join(others[:12]) if others else "(none)"}. '
                 f'Set the right one with  -p robot_model_name:=<name>')
         return None
 
@@ -349,41 +470,39 @@ class TomatoPicker(Node):
         yaw is used - a wheeled base on flat ground does not roll or pitch
         enough to matter here.
         """
-        q = robot.rotation
-        yaw = math.atan2(2.0 * (q.w * q.z + q.x * q.y),
-                         1.0 - 2.0 * (q.y * q.y + q.z * q.z))
+        x, y, z, qx, qy, qz, qw = robot
+        yaw = math.atan2(2.0 * (qw * qz + qx * qy),
+                         1.0 - 2.0 * (qy * qy + qz * qz))
         c, s = math.cos(yaw), math.sin(yaw)
-        return Point(
-            x=robot.translation.x + point.x * c - point.y * s,
-            y=robot.translation.y + point.x * s + point.y * c,
-            z=robot.translation.z + point.z)
+        return Point(x=x + point.x * c - point.y * s,
+                     y=y + point.x * s + point.y * c,
+                     z=z + point.z)
 
     def detach_nearest(self, grasp_position):
         """
         Release whichever tomato is closest to the gripper.
 
         The detection pipeline never learns model names - it only sees pixels -
-        so the fruit is identified here by matching the grasp point against the
-        model poses coming from Gazebo.
+        so the fruit is identified here by matching the grasp point against
+        Gazebo's own model poses.
         """
-        robot = self.robot_transform()
+        poses = self.gz_model_poses()
+        robot = self.find_robot(poses)
         if robot is None:
             return None
 
         target = self.to_world(grasp_position, robot)
 
         best, best_d = None, 1e9
-        for name, t in self.model_poses.items():
+        for name, p in poses.items():
             if not name.startswith('tomato_') or name in self.picked:
                 continue
-            d = dist(target, Point(x=t.translation.x,
-                                   y=t.translation.y,
-                                   z=t.translation.z))
+            d = dist(target, Point(x=p[0], y=p[1], z=p[2]))
             if d < best_d:
                 best, best_d = name, d
 
         if best is None:
-            self.get_logger().warn('no unpicked tomato models on /model_poses')
+            self.get_logger().warn('Gazebo reports no unpicked tomato models')
             return None
         if best_d > self.match_radius:
             self.get_logger().warn(

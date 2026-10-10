@@ -99,17 +99,13 @@
   gz_type_name: "gz.msgs.CameraInfo"
   direction: GZ_TO_ROS
 
-# ---------------- model poses ----------------
-# Every model's pose in the world, as a TF message whose child_frame_id is the
-# model name. The picking node uses it for one thing only: after the gripper
-# closes, it needs to know WHICH tomato it is holding so it can send that
-# fruit's detach message. A real machine would cut the stem; detaching by name
-# is the simulation's stand-in for that.
+# ---------------- note on model poses ----------------
+# There is deliberately no bridge entry for Gazebo's pose topics.
 #
-# The Gazebo topic carries the world name, so this line must be updated if the
-# world is renamed.
-- ros_topic_name: "/model_poses"
-  gz_topic_name: "/world/tomato_field/pose/info"
-  ros_type_name: "tf2_msgs/msg/TFMessage"
-  gz_type_name: "gz.msgs.Pose_V"
-  direction: GZ_TO_ROS
+# /world/<name>/pose/info and dynamic_pose/info look bridgeable as a TFMessage,
+# and the bridge accepts them, but the result is useless: Gazebo puts each
+# entity's name in the message's own `name` field, while the converter expects
+# frame ids in the header, so every transform arrives with an empty
+# child_frame_id and they all collapse onto one another. The picking node asks
+# Gazebo's CLI for these poses instead - see gz_model_poses() in
+# scripts/pick_tomato.py.

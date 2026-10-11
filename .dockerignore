@@ -1,0 +1,9 @@
+# Build output belongs to the container, not the image
+build/
+install/
+log/
+
+.git/
+__pycache__/
+*.pyc
+.vscode/

@@ -1,0 +1,74 @@
+# Docker Compose for the field robot simulation.
+#
+# Start it with docker/run.sh rather than `docker compose up` directly: the
+# script works out the host's user and GPU group ids and grants the container
+# permission to draw on the X display. Compose reads those from the
+# environment and has no way to discover them on its own.
+
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        USER_UID: "${USER_UID:-1000}"
+        USER_GID: "${USER_GID:-1000}"
+    image: field_robot:jazzy
+    container_name: field_robot
+
+    # Host networking keeps ROS 2 discovery simple: nodes inside and outside
+    # the container find each other with no extra configuration, and the X
+    # display is reachable at the same address as on the host.
+    network_mode: host
+
+    # ROS 2 moves large messages (images, point clouds) through shared memory.
+    # Without the host IPC namespace the DDS layer falls back to loopback
+    # sockets and the camera topics crawl.
+    ipc: host
+    shm_size: "2gb"
+
+    environment:
+      - DISPLAY=${DISPLAY}
+      # MIT-SHM is an X extension for passing images through shared memory.
+      # It does not survive the container boundary and makes Qt crash, so Qt
+      # is told not to try.
+      - QT_X11_NO_MITSHM=1
+      - XDG_RUNTIME_DIR=/tmp/runtime-ros
+      # Set to 1 to fall back to software rendering when /dev/dri is missing
+      # or the host GPU is not usable from inside the container.
+      - LIBGL_ALWAYS_SOFTWARE=${LIBGL_ALWAYS_SOFTWARE:-0}
+
+    volumes:
+      # The X socket: this is what lets Gazebo and RViz draw on the screen.
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      # The project itself, live. Editing a .py or .xacro on the host takes
+      # effect immediately inside the container.
+      - .:/ws/src/field_robot_project:rw
+      # Build output stays in named volumes, deliberately away from the host
+      # checkout. It survives a restart, so colcon does not start from
+      # scratch every morning, and `docker compose down -v` clears it.
+      - ws_build:/ws/build
+      - ws_install:/ws/install
+      - ws_log:/ws/log
+
+    devices:
+      # Hardware OpenGL. On an AMD or Intel integrated GPU this is all that
+      # is needed; an NVIDIA card would want the container toolkit instead.
+      - /dev/dri:/dev/dri
+
+    # Rendering needs membership of the host's video and render groups, and
+    # their numeric ids differ between distributions.
+    group_add:
+      - "${VIDEO_GID:-44}"
+      - "${RENDER_GID:-110}"
+
+    # The container is a place to open terminals in, not a single program, so
+    # it simply stays alive and waits.
+    command: sleep infinity
+    stdin_open: true
+    tty: true
+
+volumes:
+  ws_build:
+  ws_install:
+  ws_log:
